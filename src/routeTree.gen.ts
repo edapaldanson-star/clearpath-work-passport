@@ -10,33 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EmployerRouteImport } from './routes/employer'
+import { Route as DossierIdRouteImport } from './routes/dossier.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EmployerRoute = EmployerRouteImport.update({
+  id: '/employer',
+  path: '/employer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DossierIdRoute = DossierIdRouteImport.update({
+  id: '/dossier/$id',
+  path: '/dossier/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/employer': typeof EmployerRoute
+  '/dossier/$id': typeof DossierIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/employer': typeof EmployerRoute
+  '/dossier/$id': typeof DossierIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/employer': typeof EmployerRoute
+  '/dossier/$id': typeof DossierIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/employer' | '/dossier/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/employer' | '/dossier/$id'
+  id: '__root__' | '/' | '/employer' | '/dossier/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  EmployerRoute: typeof EmployerRoute
+  DossierIdRoute: typeof DossierIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/employer': {
+      id: '/employer'
+      path: '/employer'
+      fullPath: '/employer'
+      preLoaderRoute: typeof EmployerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dossier/$id': {
+      id: '/dossier/$id'
+      path: '/dossier/$id'
+      fullPath: '/dossier/$id'
+      preLoaderRoute: typeof DossierIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  EmployerRoute: EmployerRoute,
+  DossierIdRoute: DossierIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
