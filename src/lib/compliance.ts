@@ -88,7 +88,7 @@ export const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.t
 export type Stage = "documents" | "tax" | "payout" | "ready";
 export function stageStatus(c: Candidate): Record<Stage, boolean> {
   const i = c.identity;
-  const documents = !!i.extracted && i.authenticity === "passed" && i.sanctions === "passed" && i.pep === "passed";
+  const documents = !!i.extracted && i.authenticity === "passed" && i.sanctions === "passed" && i.pep === "passed" && !!i.docType && validateExpiry(i.docType, i.extracted.expiry) === null;
   const t = c.tax;
   const tax =
     (t.residency === "resident" && isValidKraPin(t.kraPin)) ||
@@ -222,4 +222,31 @@ export function simulateOcr(docType: DocType, fileName: string) {
     extracted: { fullName: "", dob: "1995-01-01", ...map[docType] },
     score: 82 + (h % 18),
   };
+}
+
+// ---------- upload validation ----------
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MIN_UPLOAD_BYTES = 10 * 1024;
+const ALLOWED_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "application/pdf": "pdf" };
+const ALLOWED_EXT = ["jpg", "jpeg", "png", "pdf"];
+
+export function validateUploadFile(f: { name: string; type: string; size: number }): string | null {
+  const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+  if (!(f.type in ALLOWED_TYPES) && !ALLOWED_EXT.includes(ext))
+    return `"${f.name}" isn't a supported file. Upload a JPG, PNG or PDF.`;
+  if (f.size > MAX_UPLOAD_BYTES)
+    return `File is ${(f.size / 1024 / 1024).toFixed(1)} MB. The limit is 5 MB — try a smaller photo or compressed PDF.`;
+  if (f.size < MIN_UPLOAD_BYTES)
+    return "File is too small to read (under 10 KB). Upload a clearer photo or scan.";
+  return null;
+}
+
+/** Returns an error message, or null if the expiry is acceptable. "—" only allowed for National ID (no expiry). */
+export function validateExpiry(docType: DocType, expiry: string, today = new Date()): string | null {
+  const v = expiry.trim();
+  if (v === "—" || v === "") return docType === "national_id" ? null : "Enter the expiry date shown on your document (YYYY-MM-DD).";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || isNaN(Date.parse(v))) return "Expiry date must be in the format YYYY-MM-DD.";
+  const t = today.toISOString().slice(0, 10);
+  if (v <= t) return `This document expired on ${v}. Upload a valid, unexpired document.`;
+  return null;
 }

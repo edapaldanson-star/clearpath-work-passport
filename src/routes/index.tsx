@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  actions, useStore, DOC_LABELS, WORK_BASIS, BANKS, simulateOcr, isValidKraPin, normalizeKenyanPhone,
+  actions, useStore, DOC_LABELS, WORK_BASIS, BANKS, simulateOcr, validateUploadFile, validateExpiry, isValidKraPin, normalizeKenyanPhone,
   isValidBankAccount, isValidBranchCode, isValidEmail, stageStatus, type Candidate, type DocType, type PayoutRail,
 } from "@/lib/compliance";
 import { cn } from "@/lib/utils";
@@ -100,9 +100,13 @@ function IdentityStep({ c }: { c: Candidate }) {
   const [busy, setBusy] = useState(false);
   const upd = (fn: (x: Candidate) => Candidate, log?: string, actor = "Candidate") => actions.update(c.id, fn, log ? { actor, action: log } : undefined);
 
+  const [uploadError, setUploadError] = useState<string | null>(null);
   async function onFile(file: File) {
     if (!i.docType) return;
     const docType = i.docType;
+    const err = validateUploadFile(file);
+    if (err) { setUploadError(err); return; }
+    setUploadError(null);
     setBusy(true);
     upd((x) => { x.identity = { ...x.identity, fileName: file.name, extracted: null, authenticity: "running", sanctions: "pending", pep: "pending", authenticityScore: null }; return x; }, `Uploaded ${DOC_LABELS[docType]} (${file.name})`);
     await wait(1200);
@@ -129,8 +133,15 @@ function IdentityStep({ c }: { c: Candidate }) {
         <label className="flex cursor-pointer flex-col items-center gap-2 rounded-md border-2 border-dashed p-6 text-sm text-muted-foreground hover:bg-muted">
           <Upload className="h-6 w-6" />
           {i.fileName ? <span><FileText className="mr-1 inline h-4 w-4" />{i.fileName} — upload again to replace</span> : "Upload a photo or PDF of your document"}
-          <input type="file" accept="image/*,.pdf" className="hidden" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); }} />
+          <span className="text-xs">JPG, PNG or PDF · 10 KB – 5 MB</span>
+          <input type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" className="hidden" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onFile(f); }} />
         </label>
+      )}
+      {uploadError && (
+        <div role="alert" className="flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          <span>{uploadError}</span>
+          <Button size="sm" variant="outline" onClick={() => setUploadError(null)}>Try again</Button>
+        </div>
       )}
       {(i.authenticity !== "pending") && (
         <div className="grid gap-3 sm:grid-cols-3">
@@ -151,6 +162,11 @@ function IdentityStep({ c }: { c: Candidate }) {
               </div>
             ))}
           </div>
+          {(() => { const e = validateExpiry(i.docType!, i.extracted!.expiry); return e && (
+            <div role="alert" className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              {e} You can correct the date above if it was misread, or upload a different document.
+            </div>
+          ); })()}
         </div>
       )}
     </div>
