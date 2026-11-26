@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Upload, FileText, Smartphone, Landmark, Globe, ScanLine, CircleCheck, LoaderCircle } from "lucide-react";
+import { useRef, useState } from "react";
+import { Upload, FileText, Smartphone, Landmark, Globe, ScanLine, CircleCheck, LoaderCircle, X } from "lucide-react";
 import { AppShell, StatusPill } from "@/components/AppShell";
 import { Tracker } from "@/components/Tracker";
 import { Button } from "@/components/ui/button";
@@ -102,16 +102,34 @@ function IdentityStep({ c }: { c: Candidate }) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadAnnouncement, setUploadAnnouncement] = useState("");
   const [uploadAttempt, setUploadAttempt] = useState(0);
+  const [cancelledFile, setCancelledFile] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const uploadRun = useRef<{ cancelled: boolean; fileName: string; previousIdentity: Candidate["identity"] } | null>(null);
   const upd = (fn: (x: Candidate) => Candidate, log?: string, actor = "Candidate") => actions.update(c.id, fn, log ? { actor, action: log } : undefined);
 
   const [uploadError, setUploadError] = useState<string | null>(null);
+  function cancelUpload() {
+    const run = uploadRun.current;
+    if (!run || run.cancelled) return;
+    run.cancelled = true;
+    uploadRun.current = null;
+    upd((x) => { x.identity = run.previousIdentity; return x; }, `Cancelled document upload (${run.fileName})`);
+    setBusy(false);
+    setUploadProgress(0);
+    setCancelledFile(run.fileName);
+    setUploadAnnouncement(`${run.fileName}: document upload cancelled. Processing stopped.${run.previousIdentity.fileName ? " Your previous document has been kept." : " No document was saved."} You can choose a file to try again.`);
+    requestAnimationFrame(() => fileInput.current?.focus());
+  }
   async function onFile(file: File) {
-    if (!i.docType || busy) return;
+    if (!i.docType || busy || uploadRun.current) return;
     setUploadAttempt((attempt) => attempt + 1);
     setUploadAnnouncement("");
     const docType = i.docType;
     const err = validateUploadFile(file);
     if (err) { setUploadError(err); return; }
+    const run = { cancelled: false, fileName: file.name, previousIdentity: structuredClone(i) };
+    uploadRun.current = run;
+    setCancelledFile(null);
     setUploadError(null);
     setUploadProgress(0);
     setBusy(true);
@@ -120,6 +138,7 @@ function IdentityStep({ c }: { c: Candidate }) {
     // Progress reflects the existing simulated processing, not a network transfer.
     for (const value of [10, 20, 30, 40, 50, 60]) {
       await wait(200);
+      if (run.cancelled) return;
       setUploadProgress(value);
       if (value === 30) setUploadAnnouncement(`${file.name}: document processing 30 percent complete.`);
       if (value === 60) setUploadAnnouncement(`${file.name}: 60 percent complete. Running simulated document checks.`);
@@ -128,11 +147,13 @@ function IdentityStep({ c }: { c: Candidate }) {
     upd((x) => { x.identity.extracted = r.extracted; x.identity.authenticityScore = r.score; x.identity.authenticity = r.score >= 85 ? "passed" : "flagged"; x.identity.sanctions = "running"; x.identity.pep = "running"; return x; }, `OCR extracted fields; authenticity score ${r.score}%`, "OCR Engine");
     for (const value of [65, 70, 75, 80, 85, 95]) {
       await wait(200);
+      if (run.cancelled) return;
       setUploadProgress(value);
       if (value === 80) setUploadAnnouncement(`${file.name}: document checks 80 percent complete.`);
     }
     upd((x) => { x.identity.sanctions = "passed"; x.identity.pep = "passed"; return x; }, "Sanctions (UN/OFAC/EU) & PEP screening clear", "Screening");
     setUploadProgress(100);
+    uploadRun.current = null;
     setBusy(false);
     setUploadAnnouncement(`${file.name}: document uploaded successfully, 100 percent complete. Confirm the extracted details.${r.score < 85 ? " Image quality flagged; manual review needed." : ""}`);
   }
@@ -152,7 +173,7 @@ function IdentityStep({ c }: { c: Candidate }) {
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {(Object.keys(DOC_LABELS) as DocType[]).map((d) => (
-          <Button key={d} variant="outline" disabled={busy} onClick={() => { setUploadError(null); setUploadProgress(0); upd((x) => { x.identity.docType = d; return x; }); }}
+          <Button key={d} variant="outline" disabled={busy} onClick={() => { setCancelledFile(null); setUploadError(null); setUploadProgress(0); upd((x) => { x.identity.docType = d; return x; }); }}
             className={cn("block h-auto whitespace-normal rounded-md border p-3 text-left text-sm", i.docType === d ? "border-primary ring-2 ring-primary/30" : "")}>
             <div className="font-medium">{DOC_LABELS[d]}</div>
             <div className="text-xs text-muted-foreground">{WORK_BASIS[d]}</div>
@@ -164,7 +185,7 @@ function IdentityStep({ c }: { c: Candidate }) {
           <Upload className="h-6 w-6" />
           {i.fileName ? <span className="max-w-full break-all text-center"><FileText className="mr-1 inline h-4 w-4" />{i.fileName}{busy ? "" : " — upload again to replace"}</span> : "Upload a photo or PDF of your document"}
           <span className="text-xs">JPG, PNG or PDF · 10 KB – 5 MB</span>
-          <input aria-label="Upload identity document" aria-invalid={!!uploadError} aria-describedby={uploadError ? "document-upload-error" : undefined} type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" className="sr-only" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onFile(f); }} />
+          <input ref={fileInput} aria-label="Upload identity document" aria-invalid={!!uploadError} aria-describedby={uploadError ? "document-upload-error" : undefined} type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" className="sr-only" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onFile(f); }} />
         </label>
       )}
       {busy && (
@@ -174,8 +195,10 @@ function IdentityStep({ c }: { c: Candidate }) {
             <span className="font-mono tabular-nums">{uploadProgress}%</span>
           </div>
           <Progress value={uploadProgress} aria-label="Document processing progress" />
+          <div className="flex justify-end"><Button variant="outline" onClick={cancelUpload}><X className="h-4 w-4" aria-hidden="true" />Cancel upload</Button></div>
         </div>
       )}
+      {cancelledFile && <p className="break-words rounded-md border bg-muted p-3 text-sm">Upload cancelled: {cancelledFile}. {i.fileName ? "Your previous document has been kept." : "No document was saved."}</p>}
       {!busy && processed && (
         <div className="flex items-start gap-2 rounded-md border border-success/40 bg-success/10 p-3 text-sm">
           <CircleCheck className="mt-0.5 h-5 w-5 shrink-0 text-success" />
