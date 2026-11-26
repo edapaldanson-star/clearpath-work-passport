@@ -100,39 +100,56 @@ function IdentityStep({ c }: { c: Candidate }) {
   const i = c.identity;
   const [busy, setBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadAnnouncement, setUploadAnnouncement] = useState("");
+  const [uploadAttempt, setUploadAttempt] = useState(0);
   const upd = (fn: (x: Candidate) => Candidate, log?: string, actor = "Candidate") => actions.update(c.id, fn, log ? { actor, action: log } : undefined);
 
   const [uploadError, setUploadError] = useState<string | null>(null);
   async function onFile(file: File) {
     if (!i.docType || busy) return;
+    setUploadAttempt((attempt) => attempt + 1);
+    setUploadAnnouncement("");
     const docType = i.docType;
     const err = validateUploadFile(file);
     if (err) { setUploadError(err); return; }
     setUploadError(null);
     setUploadProgress(0);
     setBusy(true);
+    setUploadAnnouncement(`${file.name}: document processing started, 0 percent. Checks are simulated.`);
     upd((x) => { x.identity = { ...x.identity, fileName: file.name, extracted: null, authenticity: "running", sanctions: "pending", pep: "pending", authenticityScore: null }; return x; }, `Uploaded ${DOC_LABELS[docType]} (${file.name})`);
     // Progress reflects the existing simulated processing, not a network transfer.
     for (const value of [10, 20, 30, 40, 50, 60]) {
       await wait(200);
       setUploadProgress(value);
+      if (value === 30) setUploadAnnouncement(`${file.name}: document processing 30 percent complete.`);
+      if (value === 60) setUploadAnnouncement(`${file.name}: 60 percent complete. Running simulated document checks.`);
     }
     const r = simulateOcr(docType, file.name);
     upd((x) => { x.identity.extracted = r.extracted; x.identity.authenticityScore = r.score; x.identity.authenticity = r.score >= 85 ? "passed" : "flagged"; x.identity.sanctions = "running"; x.identity.pep = "running"; return x; }, `OCR extracted fields; authenticity score ${r.score}%`, "OCR Engine");
     for (const value of [65, 70, 75, 80, 85, 95]) {
       await wait(200);
       setUploadProgress(value);
+      if (value === 80) setUploadAnnouncement(`${file.name}: document checks 80 percent complete.`);
     }
     upd((x) => { x.identity.sanctions = "passed"; x.identity.pep = "passed"; return x; }, "Sanctions (UN/OFAC/EU) & PEP screening clear", "Screening");
     setUploadProgress(100);
     setBusy(false);
+    setUploadAnnouncement(`${file.name}: document uploaded successfully, 100 percent complete. Confirm the extracted details.${r.score < 85 ? " Image quality flagged; manual review needed." : ""}`);
   }
 
   const processed = !!i.fileName && !!i.extracted && i.authenticity !== "running" && i.sanctions === "passed" && i.pep === "passed";
+  const expiryError = i.docType && i.extracted ? validateExpiry(i.docType, i.extracted.expiry) : null;
+  const validationAnnouncement = uploadError
+    ? `Document upload failed. ${uploadError} Choose another file to try again.`
+    : expiryError ? `Document expiry validation failed. ${expiryError} Correct the expiry date or upload a different document.` : "";
 
   return (
     <div className="space-y-5">
       <h2 className="font-display text-2xl font-semibold">Identity & eligibility</h2>
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{uploadAnnouncement}</div>
+      <div className="sr-only" role="alert" aria-atomic="true" aria-relevant="additions text">
+        <span key={uploadAttempt}>{validationAnnouncement}</span>
+      </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {(Object.keys(DOC_LABELS) as DocType[]).map((d) => (
           <Button key={d} variant="outline" disabled={busy} onClick={() => { setUploadError(null); setUploadProgress(0); upd((x) => { x.identity.docType = d; return x; }); }}
@@ -143,15 +160,15 @@ function IdentityStep({ c }: { c: Candidate }) {
         ))}
       </div>
       {i.docType && (
-        <label className="flex cursor-pointer flex-col items-center gap-2 rounded-md border-2 border-dashed p-6 text-sm text-muted-foreground hover:bg-muted">
+        <label className="flex cursor-pointer flex-col items-center gap-2 rounded-md border-2 border-dashed p-6 text-sm text-muted-foreground hover:bg-muted focus-within:ring-2 focus-within:ring-ring">
           <Upload className="h-6 w-6" />
           {i.fileName ? <span className="max-w-full break-all text-center"><FileText className="mr-1 inline h-4 w-4" />{i.fileName}{busy ? "" : " — upload again to replace"}</span> : "Upload a photo or PDF of your document"}
           <span className="text-xs">JPG, PNG or PDF · 10 KB – 5 MB</span>
-          <input aria-label="Upload identity document" type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" className="hidden" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onFile(f); }} />
+          <input aria-label="Upload identity document" aria-invalid={!!uploadError} aria-describedby={uploadError ? "document-upload-error" : undefined} type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" className="sr-only" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onFile(f); }} />
         </label>
       )}
       {busy && (
-        <div className="space-y-2" role="status" aria-live="polite">
+        <div className="space-y-2">
           <div className="flex items-center justify-between gap-3 text-sm">
             <span className="flex items-center gap-2"><LoaderCircle className="h-4 w-4 shrink-0 motion-safe:animate-spin" />{uploadProgress < 60 ? "Processing document" : "Running document checks"} (simulated)</span>
             <span className="font-mono tabular-nums">{uploadProgress}%</span>
@@ -160,7 +177,7 @@ function IdentityStep({ c }: { c: Candidate }) {
         </div>
       )}
       {!busy && processed && (
-        <div role="status" aria-live="polite" className="flex items-start gap-2 rounded-md border border-success/40 bg-success/10 p-3 text-sm">
+        <div className="flex items-start gap-2 rounded-md border border-success/40 bg-success/10 p-3 text-sm">
           <CircleCheck className="mt-0.5 h-5 w-5 shrink-0 text-success" />
           <div className="min-w-0">
             <p className="font-medium text-success">Document uploaded successfully · 100%</p>
@@ -170,8 +187,8 @@ function IdentityStep({ c }: { c: Candidate }) {
         </div>
       )}
       {uploadError && (
-        <div role="alert" className="flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          <span>{uploadError}</span>
+        <div className="flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          <span id="document-upload-error">{uploadError}</span>
           <Button size="sm" variant="outline" onClick={() => setUploadError(null)}>Try again</Button>
         </div>
       )}
@@ -190,15 +207,15 @@ function IdentityStep({ c }: { c: Candidate }) {
             {(["fullName", "docNumber", "dob", "nationality", "expiry"] as const).map((k) => (
               <div key={k}>
                 <Label htmlFor={`f-${k}`} className="text-xs">{{ fullName: "Full name (as on document)", docNumber: "Document number", dob: "Date of birth", nationality: "Nationality", expiry: "Expiry" }[k]}</Label>
-                <Input id={`f-${k}`} value={i.extracted?.[k] ?? ""} className="font-mono" onChange={(e) => upd((x) => { if (x.identity.extracted) x.identity.extracted[k] = e.target.value; return x; })} />
+                <Input id={`f-${k}`} aria-invalid={k === "expiry" && !!expiryError} aria-describedby={k === "expiry" && expiryError ? "document-expiry-error" : undefined} value={i.extracted?.[k] ?? ""} className="font-mono" onChange={(e) => upd((x) => { if (x.identity.extracted) x.identity.extracted[k] = e.target.value; return x; })} />
               </div>
             ))}
           </div>
-          {(() => { const e = i.docType && i.extracted ? validateExpiry(i.docType, i.extracted.expiry) : null; return e && (
-            <div role="alert" className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              {e} You can correct the date above if it was misread, or upload a different document.
+          {expiryError && (
+            <div id="document-expiry-error" className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              {expiryError} You can correct the date above if it was misread, or upload a different document.
             </div>
-          ); })()}
+          )}
         </div>
       )}
     </div>
