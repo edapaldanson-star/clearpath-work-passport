@@ -13,6 +13,7 @@ import {
   isValidBankAccount, isValidBranchCode, isValidEmail, stageStatus, type Candidate, type DocType, type PayoutRail,
 } from "@/lib/compliance";
 import { cn } from "@/lib/utils";
+import { AiDocReview } from "@/components/AiDocReview";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -222,6 +223,7 @@ function IdentityStep({ c }: { c: Candidate }) {
           <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">PEP check</div><StatusPill status={i.pep} /></div>
         </div>
       )}
+      {i.docType && <AiDocReview docType={i.docType} />}
       {i.authenticity === "flagged" && <p className="text-sm text-destructive">Image quality looks low. Retake in good light without glare, or your employer will review manually.</p>}
       {i.extracted && (
         <div>

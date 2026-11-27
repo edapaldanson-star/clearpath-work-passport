@@ -30,3 +30,5 @@ use the editor.
 <!-- LOVABLE:END -->
 
 - Onboarding app is frontend-only; candidate files persist in browser localStorage via src/lib/compliance.ts (verification steps are simulated) — no backend yet.
+
+- AI document review lives in src/lib/doc-review.functions.ts (server fn via Lovable AI Gateway); it is advisory only and never changes compliance state — employer review stays authoritative.
