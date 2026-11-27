@@ -54,7 +54,7 @@ export function AiDocReview({ docType }: { docType: DocType }) {
         <input ref={input} type="file" className="sr-only" aria-label="Choose document photo for AI check" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onFile(f); }} />
       </div>
-      <p className="sr-only" role="status" aria-live="polite">{announce}</p>
+      <p className="sr-only" aria-live="polite" aria-atomic="true">{announce}</p>
       {error && <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
       {result && (
         <div className="mt-4 space-y-3 text-sm">
