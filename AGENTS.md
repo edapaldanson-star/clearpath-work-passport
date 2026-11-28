@@ -32,3 +32,8 @@ use the editor.
 - Onboarding app is frontend-only; candidate files persist in browser localStorage via src/lib/compliance.ts (verification steps are simulated) — no backend yet.
 
 - AI document review lives in src/lib/doc-review.functions.ts (server fn via Lovable AI Gateway); it is advisory only and never changes compliance state — employer review stays authoritative.
+
+- Keep candidate workflow in its shared component and expose it at /onboarding; / is the public home while existing employer and dossier URLs stay unchanged, so marketing cannot disrupt upload state.
+- Preserve the legacy localStorage key across rebrands so existing candidate records survive.
+- Use the privacy helpers for employer summaries and default dossier exports; mask identifiers and redact audit values to avoid accidental disclosure.
+- Centralise public-page metadata and shared branding/navigation so each content route remains uniquely shareable.

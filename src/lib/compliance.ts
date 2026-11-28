@@ -16,7 +16,7 @@ export const WORK_BASIS: Record<DocType, string> = {
   national_id: "Kenyan citizen — unrestricted right to work",
   passport: "Foreign national — Class D/G work permit required",
   alien_card: "Foreign resident — work permit / dependant pass on file",
-  unhcr: "Refugee — Class M permit eligible (Refugees Act 2021)",
+  unhcr: "Refugee registration — employer must confirm applicable work permission; registration alone is not authorisation",
 };
 
 export const BANKS = [

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { actions, type Candidate, useStore } from "@/lib/compliance";
-import { Route } from "@/routes/index";
+import { Route } from "@/routes/onboarding";
 
 // Keep the real portal and store; only remove navigation/layout dependencies.
 vi.mock("@/components/AppShell", () => ({
